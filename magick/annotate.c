@@ -573,6 +573,37 @@ MagickExport MagickBooleanType AnnotateImage(Image *image,
 %    o caption: the caption.
 %
 */
+
+static inline char *ReplaceSpaceWithNewline(char **caption,char *space)
+{
+  size_t
+    octets;
+
+  octets=(size_t) GetUTFOctets(space);
+  if (octets == 1)
+    *space='\n';
+  else
+    {
+      char
+        *target;
+
+      size_t
+        length,
+        offset;
+
+      length=strlen(*caption);
+      *space='\n';
+      offset=space-(*caption);
+      target=AcquireString(*caption);
+      CopyMagickString(target,*caption,offset+2);
+      ConcatenateMagickString(target,space+octets,length);
+      (void) DestroyString(*caption);
+      *caption=target;
+      space=(*caption)+offset;
+    }
+  return(space);
+}
+
 MagickExport ssize_t FormatMagickCaption(Image *image,DrawInfo *draw_info,
   const MagickBooleanType split,TypeMetric *metrics,char **caption)
 {
@@ -595,14 +626,24 @@ MagickExport ssize_t FormatMagickCaption(Image *image,DrawInfo *draw_info,
 
   q=draw_info->text;
   s=(char *) NULL;
+  width=0;
   for (p=(*caption); GetUTFCode(p) != 0; p+=GetUTFOctets(p))
   {
-    if (IsUTFSpace(GetUTFCode(p)) != MagickFalse)
-      s=p;
-    if (GetUTFCode(p) == '\n')
+    int
+      code;
+
+    code=GetUTFCode(p);
+    if (code == '\n')
       {
         q=draw_info->text;
         continue;
+      }
+    if ((IsUTFSpace(code) != MagickFalse) &&
+        (IsNonBreakingUTFSpace(code) == MagickFalse))
+      {
+        s=p;
+        if (width > image->columns)
+          p=ReplaceSpaceWithNewline(caption,s);
       }
     for (i=0; i < (ssize_t) GetUTFOctets(p); i++)
       *q++=(*(p+i));
@@ -614,12 +655,7 @@ MagickExport ssize_t FormatMagickCaption(Image *image,DrawInfo *draw_info,
     if (width <= image->columns)
       continue;
     if (s != (char *) NULL)
-      {
-        for (i=0; i < (ssize_t) GetUTFOctets(s); i++)
-          *(s+i)=' ';
-        *s='\n';
-        p=s;
-      }
+      p=ReplaceSpaceWithNewline(caption,s);
     else
       if ((split != MagickFalse) || (GetUTFOctets(p) > 2))
         {
@@ -1628,17 +1664,13 @@ static MagickBooleanType RenderFreetype(Image *image,const DrawInfo *draw_info,
     ft_status=FT_Outline_Get_BBox(&outline,&bounds);
     if (ft_status != 0)
       continue;
-    if ((p == draw_info->text) || (bounds.xMin < metrics->bounds.x1))
-      if (bounds.xMin != 0)
+    if ((bounds.xMin < metrics->bounds.x1) && (bounds.xMin != 0))
         metrics->bounds.x1=(double) bounds.xMin;
-    if ((p == draw_info->text) || (bounds.yMin < metrics->bounds.y1))
-      if (bounds.yMin != 0)
+    if ((bounds.yMin < metrics->bounds.y1) && (bounds.yMin != 0))
         metrics->bounds.y1=(double) bounds.yMin;
-    if ((p == draw_info->text) || (bounds.xMax > metrics->bounds.x2))
-      if (bounds.xMax != 0)
+    if ((bounds.xMax > metrics->bounds.x2) && (bounds.xMax != 0))
         metrics->bounds.x2=(double) bounds.xMax;
-    if ((p == draw_info->text) || (bounds.yMax > metrics->bounds.y2))
-      if (bounds.yMax != 0)
+    if ((bounds.yMax > metrics->bounds.y2) && (bounds.yMax != 0))
         metrics->bounds.y2=(double) bounds.yMax;
     if (((draw_info->stroke.opacity != TransparentOpacity) ||
          (draw_info->stroke_pattern != (Image *) NULL)) &&

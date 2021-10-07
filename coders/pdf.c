@@ -248,6 +248,8 @@ static void ReadPDFInfo(const ImageInfo *image_info,Image *image,
               version[i++]=(char) c;
             }
             version[i]='\0';
+            if (c == EOF)
+              break;
           }
         continue;
       }
@@ -297,6 +299,8 @@ static void ReadPDFInfo(const ImageInfo *image_info,Image *image,
           name[i++]=(char) c;
         }
         name[i]='\0';
+        if (c == EOF)
+          break;
         value=ConstantString(name);
         (void) SubstituteString(&value,"#20"," ");
         if (*value != '\0')
@@ -575,9 +579,11 @@ static Image *ReadPDFImage(const ImageInfo *image_info,ExceptionInfo *exception)
     image->y_resolution);
   if (image_info->ping != MagickFalse)
     (void) FormatLocaleString(density,MagickPathExtent,"2.0x2.0");
-  if ((image_info->page != (char *) NULL) || (fitPage != MagickFalse))
-    (void) FormatLocaleString(options,MaxTextExtent,"-g%.20gx%.20g ",(double)
-      page.width,(double) page.height);
+  else
+    if ((image_info->page != (char *) NULL) || (fitPage != MagickFalse))
+      (void) FormatLocaleString(options,MaxTextExtent,"-g%.20gx%.20g ",
+        (double) page.width,(double) page.height);
+  (void) ConcatenateMagickString(options,"-dPrinted=false ",MagickPathExtent);
   if (fitPage != MagickFalse)
     (void) ConcatenateMagickString(options,"-dPSFitPage ",MaxTextExtent);
   if (info.cropbox != MagickFalse)
@@ -645,19 +651,37 @@ static Image *ReadPDFImage(const ImageInfo *image_info,ExceptionInfo *exception)
       (void) RelinquishUniqueFileResource(read_info->filename);
     }
   else
-    for (i=1; ; i++)
     {
-      (void) InterpretImageFilename(image_info,image,filename,(int) i,
-        read_info->filename);
-      if (IsGhostscriptRendered(read_info->filename) == MagickFalse)
-        break;
-      read_info->blob=NULL;
-      read_info->length=0;
-      next=ReadImage(read_info,exception);
-      (void) RelinquishUniqueFileResource(read_info->filename);
+      next=(Image *) NULL;
+      for (i=1; ; i++)
+      {
+        (void) InterpretImageFilename(image_info,image,filename,(int) i,
+          read_info->filename);
+        if (IsGhostscriptRendered(read_info->filename) == MagickFalse)
+          break;
+        read_info->blob=NULL;
+        read_info->length=0;
+        next=ReadImage(read_info,exception);
+        (void) RelinquishUniqueFileResource(read_info->filename);
+        if (next == (Image *) NULL)
+          break;
+        AppendImageToList(&pdf_image,next);
+      }
+      /* Clean up remaining files */
       if (next == (Image *) NULL)
-        break;
-      AppendImageToList(&pdf_image,next);
+        {
+          ssize_t
+            j;
+
+          for (j=i+1; ; j++)
+            {
+              (void) InterpretImageFilename(image_info,image,filename,(int) j,
+                read_info->filename);
+              if (IsGhostscriptRendered(read_info->filename) == MagickFalse)
+                break;
+              (void) RelinquishUniqueFileResource(read_info->filename);
+            }
+        }
     }
   read_info=DestroyImageInfo(read_info);
   if (pdf_image == (Image *) NULL)
@@ -716,6 +740,13 @@ static Image *ReadPDFImage(const ImageInfo *image_info,ExceptionInfo *exception)
     (void) CopyMagickString(pdf_image->filename,filename,MaxTextExtent);
     (void) CopyMagickString(pdf_image->magick,image->magick,MaxTextExtent);
     pdf_image->page=page;
+    if (image_info->ping != MagickFalse)
+      {
+        pdf_image->magick_columns=page.width;
+        pdf_image->magick_rows=page.height;
+        pdf_image->columns=page.width;
+        pdf_image->rows=page.height;
+      }
     (void) CloneImageProfiles(pdf_image,image);
     (void) CloneImageProperties(pdf_image,image);
     next=SyncNextImageInList(pdf_image);
@@ -1592,6 +1623,7 @@ static MagickBooleanType WritePDFImage(const ImageInfo *image_info,Image *image)
         break;
     }
     if (compression == JPEG2000Compression)
+      if (IssRGBCompatibleColorspace(image->colorspace) == MagickFalse)
       (void) TransformImageColorspace(image,sRGBColorspace);
     /*
       Scale relative to dots-per-inch.
@@ -2985,7 +3017,7 @@ static MagickBooleanType WritePDFImage(const ImageInfo *image_info,Image *image)
           hex_digits[13]='D';
           hex_digits[14]='E';
           hex_digits[15]='F';
-          (void) FormatLocaleString(buffer,MagickPathExtent,"/Title <");
+          (void) FormatLocaleString(buffer,MagickPathExtent,"/Title <FEFF");
           (void) WriteBlobString(image,buffer);
           for (i=0; i < (ssize_t) length; i++)
           {

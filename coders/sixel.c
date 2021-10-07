@@ -48,6 +48,7 @@
 #include "magick/color.h"
 #include "magick/color-private.h"
 #include "magick/colormap.h"
+#include "magick/colormap-private.h"
 #include "magick/colorspace.h"
 #include "magick/colorspace-private.h"
 #include "magick/exception.h"
@@ -115,7 +116,7 @@ typedef struct sixel_output {
 
     Image *image;
     int pos;
-    unsigned char buffer[1];
+    unsigned char buffer[SIXEL_OUTPUT_PACKET_SIZE*2];
 
 } sixel_output_t;
 
@@ -157,13 +158,13 @@ static int hue_to_rgb(int n1, int n2, int hue)
     }
 
     if (hue < (HLSMAX / 6)) {
-        return (n1 + (((n2 - n1) * hue + (HLSMAX / 12)) / (HLSMAX / 6)));
+        return (n1 + (((ssize_t) (n2 - n1) * hue + (HLSMAX / 12)) / (HLSMAX / 6)));
     }
     if (hue < (HLSMAX / 2)) {
         return (n2);
     }
     if (hue < ((HLSMAX * 2) / 3)) {
-        return (n1 + (((n2 - n1) * (((HLSMAX * 2) / 3) - hue) + (HLSMAX / 12))/(HLSMAX / 6)));
+        return (n1 + (((ssize_t) (n2 - n1) * (((HLSMAX * 2) / 3) - hue) + (HLSMAX / 12))/(HLSMAX / 6)));
     }
     return (n1);
 }
@@ -577,7 +578,7 @@ sixel_output_t *sixel_output_create(Image *image)
 {
     sixel_output_t *output;
 
-    output = (sixel_output_t *) AcquireQuantumMemory(sizeof(sixel_output_t) + SIXEL_OUTPUT_PACKET_SIZE * 2, 1);
+    output = (sixel_output_t *) AcquireMagickMemory(sizeof(sixel_output_t));
     if (output == (sixel_output_t *) NULL)
       return((sixel_output_t *) NULL);
     output->has_8bit_control = 0;
@@ -1100,7 +1101,9 @@ static Image *ReadSIXELImage(const ImageInfo *image_info,ExceptionInfo *exceptio
         for (x=0; x < (ssize_t) image->columns; x++)
         {
           j=(ssize_t) sixel_pixels[y * image->columns + x];
+          j=ConstrainColormapIndex(image,j);
           SetPixelIndex(indexes+x,j);
+          SetPixelRGBO(r,image->colormap+(ssize_t) j);
           r++;
         }
         if (SyncAuthenticPixels(image,exception) == MagickFalse)

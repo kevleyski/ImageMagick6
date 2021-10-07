@@ -691,6 +691,9 @@ static MagickBooleanType WritePICONImage(const ImageInfo *image_info,
   ImageInfo
     *blob_info;
 
+  ImageType
+    type;
+
   MagickBooleanType
     status,
     transparent;
@@ -738,16 +741,19 @@ static MagickBooleanType WritePICONImage(const ImageInfo *image_info,
   status=OpenBlob(image_info,image,WriteBinaryBlobMode,&image->exception);
   if (status == MagickFalse)
     return(status);
-  (void) TransformImageColorspace(image,sRGBColorspace);
+  if (IssRGBCompatibleColorspace(image->colorspace) == MagickFalse)
+    (void) TransformImageColorspace(image,sRGBColorspace);
   SetGeometry(image,&geometry);
   (void) ParseMetaGeometry(PiconGeometry,&geometry.x,&geometry.y,
     &geometry.width,&geometry.height);
   picon=ResizeImage(image,geometry.width,geometry.height,TriangleFilter,1.0,
     &image->exception);
   blob_info=CloneImageInfo(image_info);
+  *blob_info->magick='\0';
   (void) AcquireUniqueFilename(blob_info->filename);
+  type=IdentifyImageType(image,&image->exception);
   if ((image_info->type != TrueColorType) &&
-      (SetImageGray(image,&image->exception) != MagickFalse))
+      ((type == GrayscaleType) || (type == BilevelType)))
     affinity_image=BlobToImage(blob_info,Graymap,GraymapExtent,
       &image->exception);
   else
@@ -1012,7 +1018,8 @@ static MagickBooleanType WriteXPMImage(const ImageInfo *image_info,Image *image)
   if (status == MagickFalse)
     return(status);
   if (IssRGBCompatibleColorspace(image->colorspace) == MagickFalse)
-    (void) TransformImageColorspace(image,sRGBColorspace);
+    if (IssRGBCompatibleColorspace(image->colorspace) == MagickFalse)
+      (void) TransformImageColorspace(image,sRGBColorspace);
   opacity=(-1);
   if (image->matte == MagickFalse)
     {
@@ -1093,7 +1100,7 @@ static MagickBooleanType WriteXPMImage(const ImageInfo *image_info,Image *image)
     if (isalnum((int) ((unsigned char) basename[i])) == 0)
       basename[i]='_';
   (void) FormatLocaleString(buffer,MaxTextExtent,
-    "static char *%.1024s[] = {\n",basename);
+    "static const char *%.1024s[] = {\n",basename);
   (void) WriteBlobString(image,buffer);
   (void) WriteBlobString(image,"/* columns rows colors chars-per-pixel */\n");
   (void) FormatLocaleString(buffer,MaxTextExtent,

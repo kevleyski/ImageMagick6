@@ -76,12 +76,14 @@ static int ImportMain(int argc,char **argv)
     status;
 
   MagickCoreGenesis(*argv,MagickTrue);
+  MagickWandGenesis();
   exception=AcquireExceptionInfo();
   image_info=AcquireImageInfo();
   status=MagickCommandGenesis(image_info,ImportImageCommand,argc,argv,
     (char **) NULL,exception);
   image_info=DestroyImageInfo(image_info);
   exception=DestroyExceptionInfo(exception);
+  MagickWandTerminus();
   MagickCoreTerminus();
   return(status != MagickFalse ? 0 : 1);
 }

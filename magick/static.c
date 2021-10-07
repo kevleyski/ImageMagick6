@@ -395,17 +395,17 @@ MagickExport MagickBooleanType RegisterStaticModule(const char *module,
   */
   assert(module != (const char *) NULL);
   (void) CopyMagickString(module_name,module,MagickPathExtent);
-  rights=ReadPolicyRights;
-  if (IsRightsAuthorized(ModulePolicyDomain,rights,module) == MagickFalse)
+  p=GetCoderInfo(module,exception);
+  if (p != (CoderInfo *) NULL)
+    (void) CopyMagickString(module_name,p->name,MagickPathExtent);
+  rights=ReadPolicyRights|WritePolicyRights;
+  if (IsRightsAuthorized(ModulePolicyDomain,rights,module_name) == MagickFalse)
     {
       errno=EPERM;
       (void) ThrowMagickException(exception,GetMagickModule(),PolicyError,
         "NotAuthorized","`%s'",module);
       return(MagickFalse);
     }
-  p=GetCoderInfo(module,exception);
-  if (p != (CoderInfo *) NULL)
-    (void) CopyMagickString(module_name,p->name,MagickPathExtent);
   extent=sizeof(MagickModules)/sizeof(MagickModules[0]);
   for (i=0; i < (ssize_t) extent; i++)
     if (LocaleCompare(MagickModules[i].module,module_name) == 0)
@@ -441,17 +441,24 @@ MagickExport MagickBooleanType RegisterStaticModule(const char *module,
 */
 MagickExport void RegisterStaticModules(void)
 {
+  PolicyRights
+    rights;
+
   size_t
     extent;
 
   ssize_t
     i;
 
+  rights=ReadPolicyRights|WritePolicyRights;
   extent=sizeof(MagickModules)/sizeof(MagickModules[0]);
   for (i=0; i < (ssize_t) extent; i++)
   {
     if (MagickModules[i].registered == MagickFalse)
       {
+        if (IsRightsAuthorized(ModulePolicyDomain,rights,
+              MagickModules[i].module) == MagickFalse)
+          continue;
         (void) (MagickModules[i].register_module)();
         MagickModules[i].registered=MagickTrue;
       }

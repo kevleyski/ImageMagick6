@@ -1468,7 +1468,7 @@ MagickExport
 MagickBooleanType InitOpenCLEnv(MagickCLEnv clEnv, ExceptionInfo* exception) {
   MagickBooleanType status = MagickFalse;
 
-  if (clEnv == NULL)
+  if ((clEnv == NULL) || (getenv("MAGICK_OCL_DEVICE") == (const char *) NULL))
     return MagickFalse;
 
 #ifdef MAGICKCORE_CLPERFMARKER
@@ -1477,8 +1477,7 @@ MagickBooleanType InitOpenCLEnv(MagickCLEnv clEnv, ExceptionInfo* exception) {
 
   LockSemaphoreInfo(clEnv->lock);
   if (clEnv->OpenCLInitialized == MagickFalse) {
-    if (clEnv->device==NULL
-        && clEnv->OpenCLDisabled == MagickFalse)
+    if (clEnv->device==NULL && clEnv->OpenCLDisabled == MagickFalse)
       status = autoSelectDevice(clEnv, exception);
     else
       status = InitOpenCLEnvInternal(clEnv, exception);

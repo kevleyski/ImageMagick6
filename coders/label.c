@@ -88,6 +88,30 @@
 %    o exception: return any errors or warnings in this structure.
 %
 */
+
+static inline void AdjustTypeMetricBounds(const DrawInfo *draw_info,
+  TypeMetric *metrics)
+{
+  if (draw_info->gravity == UndefinedGravity)
+    return;
+  if (metrics->bounds.x1 >= 0.0)
+    metrics->bounds.x1=0.0;
+  else
+    {
+      double x1 = ceil(-metrics->bounds.x1+0.5);
+      metrics->width+=x1+x1;
+      metrics->bounds.x1=x1;
+    }
+  if (metrics->bounds.y1 >= 0.0)
+    metrics->bounds.y1=0.0;
+  else
+    {
+      double y1 = ceil(-metrics->bounds.y1+0.5);
+      metrics->height+=y1+y1;
+      metrics->bounds.y1=y1;
+    }
+}
+
 static Image *ReadLABELImage(const ImageInfo *image_info,
   ExceptionInfo *exception)
 {
@@ -104,12 +128,12 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
   MagickBooleanType
     status;
 
-  TypeMetric
-    metrics;
-
   size_t
     height,
     width;
+
+  TypeMetric
+    metrics;
 
   /*
     Initialize Image structure.
@@ -145,6 +169,7 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
   draw_info->text=ConstantString(label);
   (void) memset(&metrics,0,sizeof(metrics));
   status=GetMultilineTypeMetrics(image,draw_info,&metrics);
+  AdjustTypeMetricBounds(draw_info,&metrics);
   if ((image->columns == 0) && (image->rows == 0))
     {
       image->columns=(size_t) floor(metrics.width+draw_info->stroke_width+0.5);
@@ -172,6 +197,7 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
           if (draw_info->gravity == UndefinedGravity)
             (void) CloneString(&draw_info->geometry,geometry);
           status=GetMultilineTypeMetrics(image,draw_info,&metrics);
+          AdjustTypeMetricBounds(draw_info,&metrics);
           if (status == MagickFalse)
             break;
           width=(size_t) floor(metrics.width+draw_info->stroke_width+0.5);
@@ -202,6 +228,7 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
           if (draw_info->gravity == UndefinedGravity)
             (void) CloneString(&draw_info->geometry,geometry);
           status=GetMultilineTypeMetrics(image,draw_info,&metrics);
+          AdjustTypeMetricBounds(draw_info,&metrics);
           if (status == MagickFalse)
             break;
           width=(size_t) floor(metrics.width+draw_info->stroke_width+0.5);
@@ -224,6 +251,7 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
           {
             draw_info->pointsize=floor((low+high)/2.0-0.5);
             status=GetMultilineTypeMetrics(image,draw_info,&metrics);
+            AdjustTypeMetricBounds(draw_info,&metrics);
           }
       }
   label=DestroyString(label);
@@ -263,8 +291,8 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
   */
   (void) FormatLocaleString(geometry,MagickPathExtent,"%+g%+g",
     (draw_info->direction == RightToLeftDirection ? (double) image->columns-
-    metrics.bounds.x2 : 0.0),(draw_info->gravity == UndefinedGravity ?
-    MagickMax(metrics.ascent,metrics.bounds.y2) : 0.0));
+    metrics.bounds.x2 : metrics.bounds.x1),(draw_info->gravity ==
+    UndefinedGravity ? MagickMax(metrics.ascent,metrics.bounds.y2) : 0.0));
   (void) CloneString(&draw_info->geometry,geometry);
   status=AnnotateImage(image,draw_info);
   if (image_info->pointsize == 0.0)

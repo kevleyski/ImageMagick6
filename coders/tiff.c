@@ -619,7 +619,7 @@ static MagickBooleanType TIFFGetProperties(TIFF *tiff,Image *image)
 {
   char
     message[MaxTextExtent],
-    *text;
+    *text = (char *) NULL;
 
   MagickBooleanType
     status;
@@ -628,7 +628,6 @@ static MagickBooleanType TIFFGetProperties(TIFF *tiff,Image *image)
     count,
     type;
 
-  text=(char *) NULL;
   status=MagickTrue;
   if ((TIFFGetField(tiff,TIFFTAG_ARTIST,&text) == 1) &&
       (text != (char *) NULL))
@@ -926,10 +925,11 @@ static TIFFMethodType GetJPEGMethod(Image* image,TIFF *tiff,uint16 photometric,
 
 #if defined(TIFF_VERSION_BIG)
   uint64
+    *value = (uint64 *) NULL;
 #else
   uint32
+    *value = (uint32 *) NULL;
 #endif
-    *value;
 
   unsigned char
     buffer[BUFFER_SIZE+32];
@@ -946,7 +946,6 @@ static TIFFMethodType GetJPEGMethod(Image* image,TIFF *tiff,uint16 photometric,
   /*
     Search for Adobe APP14 JPEG marker.
   */
-  value=NULL;
   if (!TIFFGetField(tiff,TIFFTAG_STRIPOFFSETS,&value) || (value == NULL))
     return(ReadStripMethod);
   position=TellBlob(image);
@@ -1088,7 +1087,7 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
     *option;
 
   float
-    *chromaticity,
+    *chromaticity = (float *) NULL,
     x_position,
     y_position,
     x_resolution,
@@ -1506,9 +1505,9 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
           range;
 
         uint16
-          *blue_colormap,
-          *green_colormap,
-          *red_colormap;
+          *blue_colormap = (uint16 *) NULL,
+          *green_colormap = (uint16 *) NULL,
+          *red_colormap = (uint16 *) NULL;
 
         /*
           Initialize colormap.
@@ -1892,12 +1891,7 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
         number_pixels=(MagickSizeType) columns*rows;
         if (HeapOverflowSanityCheck(rows,sizeof(*tile_pixels)) != MagickFalse)
           ThrowTIFFException(ResourceLimitError,"MemoryAllocationFailed");
-        extent=TIFFTileSize(tiff);
-#if defined(TIFF_VERSION_BIG)
-        extent+=columns*sizeof(uint64);
-#else
-        extent+=columns*sizeof(uint32);
-#endif
+        extent=MagickMax(rows*TIFFTileRowSize(tiff),TIFFTileSize(tiff));
         tile_pixels=(unsigned char *) AcquireQuantumMemory(extent,
           sizeof(*tile_pixels));
         if (tile_pixels == (unsigned char *) NULL)
@@ -1940,7 +1934,7 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
               columns_remaining=image->columns-x;
               if ((ssize_t) (x+columns) < (ssize_t) image->columns)
                 columns_remaining=columns;
-              if (TIFFReadTile(tiff,tile_pixels,(uint32) x,(uint32) y,0,i) == 0)
+              if (TIFFReadTile(tiff,tile_pixels,(uint32) x,(uint32) y,0,i) == -1)
                 break;
               p=tile_pixels;
               for (row=0; row < rows_remaining; row++)
@@ -2000,8 +1994,13 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
         if (generic_info == (MemoryInfo *) NULL)
           ThrowTIFFException(ResourceLimitError,"MemoryAllocationFailed");
         pixels=(uint32 *) GetVirtualMemoryBlob(generic_info);
-        (void) TIFFReadRGBAImage(tiff,(uint32) image->columns,(uint32)
+        status=TIFFReadRGBAImage(tiff,(uint32) image->columns,(uint32)
           image->rows,(uint32 *) pixels,0);
+        if (status == -1)
+          {
+            generic_info=RelinquishVirtualMemory(generic_info);
+            break;
+          }
         p=pixels+(image->columns*image->rows)-1;
         for (y=0; y < (ssize_t) image->rows; y++)
         {
@@ -2926,6 +2925,9 @@ static void TIFFSetProfiles(TIFF *tiff,Image *image)
 #endif
     if (LocaleCompare(name,"iptc") == 0)
       {
+        const TIFFField
+          *field;
+
         size_t
           length;
 
@@ -2936,11 +2938,20 @@ static void TIFFSetProfiles(TIFF *tiff,Image *image)
         length=GetStringInfoLength(profile)+4-(GetStringInfoLength(profile) &
           0x03);
         SetStringInfoLength(iptc_profile,length);
-        if (TIFFIsByteSwapped(tiff))
-          TIFFSwabArrayOfLong((uint32 *) GetStringInfoDatum(iptc_profile),
-            (unsigned long) (length/4));
-        (void) TIFFSetField(tiff,TIFFTAG_RICHTIFFIPTC,(uint32)
-          GetStringInfoLength(iptc_profile)/4,GetStringInfoDatum(iptc_profile));
+        field=TIFFFieldWithTag(tiff,TIFFTAG_RICHTIFFIPTC);
+        if (TIFFFieldDataType(field) == TIFF_LONG)
+          {
+            if (TIFFIsByteSwapped(tiff))
+              TIFFSwabArrayOfLong((uint32 *) GetStringInfoDatum(iptc_profile),
+                (unsigned long) (length/4));
+            (void) TIFFSetField(tiff,TIFFTAG_RICHTIFFIPTC,(uint32)
+              GetStringInfoLength(iptc_profile)/4,GetStringInfoDatum(
+                iptc_profile));
+          }
+        else
+          (void) TIFFSetField(tiff,TIFFTAG_RICHTIFFIPTC,(uint32)
+            GetStringInfoLength(iptc_profile),GetStringInfoDatum(
+              iptc_profile));
         iptc_profile=DestroyStringInfo(iptc_profile);
       }
 #if defined(TIFFTAG_PHOTOSHOP)

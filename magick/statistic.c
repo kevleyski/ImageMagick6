@@ -1620,7 +1620,7 @@ MagickExport MagickBooleanType GetImageChannelMean(const Image *image,
   if (((channel & OpacityChannel) != 0) && (image->matte != MagickFalse))
     {
       channel_statistics[CompositeChannels].mean+=
-        (QuantumRange-channel_statistics[OpacityChannel].mean);
+        channel_statistics[OpacityChannel].mean;
       channel_statistics[CompositeChannels].standard_deviation+=
         channel_statistics[OpacityChannel].standard_deviation;
       channels++;

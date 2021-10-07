@@ -34,12 +34,12 @@ m4_define([magick_git_revision],
           m4_esyscmd([
             c=$(git log --full-history --format=tformat:. HEAD | wc -l)
             h=$(git rev-parse --short HEAD)
-            d=$(date +%Y%m%d)
+            d=$(date -u +%Y%m%d)
             printf %s "$c:$h:$d"
           ]))
 m4_define([magick_release_date],
           m4_esyscmd([
-            d=$(date +%F -r ./ChangeLog)
+            d=$(date -u +%F -r ./ChangeLog)
             printf %s "$d"
           ]))
 
@@ -691,17 +691,6 @@ if test "$enable_pipes" = 'yes'; then
     MAGICK_FEATURES="Pipes $MAGICK_FEATURES"
 fi
 
-# Build a version of ImageMagick with assert statements.
-AC_ARG_ENABLE([assert],
-    [AC_HELP_STRING([--disable-assert],
-                    [disable assert() statements in build])],
-    [enable_assert=$enableval],
-    [enable_assert='yes'])
-
-if test "$enable_assert" = 'no'; then
-    AC_DEFINE([NDEBUG],[1],[Turn off assert statements])
-fi
-
 # Don't emit "rebuild rules" for configure, Makefile.ins, etc.
 AM_MAINTAINER_MODE
 
@@ -948,7 +937,7 @@ AC_HEADER_ASSERT
 AC_HEADER_DIRENT
 
 # Check additional headers
-AC_CHECK_HEADERS(arm/limits.h arpa/inet.h complex.h errno.h fcntl.h float.h limits.h linux/unistd.h locale.h malloc.h machine/param.h mach-o/dyld.h netdb.h netinet/in.h OS.h process.h stddef.h sun_prefetch.h stdarg.h sys/ipc.h sys/mman.h sys/resource.h sys/sendfile.h sys/socket.h sys/syslimits.h sys/time.h sys/timeb.h sys/times.h sys/uio.h sys/wait.h utime.h wchar.h xlocale.h)
+AC_CHECK_HEADERS(arm/limits.h arpa/inet.h complex.h errno.h fcntl.h float.h limits.h linux/unistd.h locale.h malloc.h machine/param.h mach-o/dyld.h netdb.h netinet/in.h OS.h process.h stddef.h sun_prefetch.h stdarg.h sys/ipc.h sys/mman.h sys/resource.h sys/sendfile.h sys/socket.h sys/syslimits.h sys/time.h sys/times.h sys/uio.h sys/wait.h utime.h wchar.h xlocale.h)
 
 ########
 #
